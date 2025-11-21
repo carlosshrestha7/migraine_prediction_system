@@ -1,6 +1,6 @@
 # predict_migraine.py
 """
-Prediction script with enhanced recommendations
+Prediction script with enhanced recommendations - UPDATED for your data
 """
 
 import pandas as pd
@@ -22,26 +22,21 @@ def main():
         print(f"❌ Error loading model: {e}")
         return
     
-    # Example user data - using column names that match your training data
+    # Example user data - using YOUR actual column names
     sample_data = pd.DataFrame([{
-        'timestamp': 1705320000,  # Example timestamp
-        'stress_intensity': 7,
-        'sleep_duration': 6.5,
-        'sleep_deficit': 1,
-        'missed_meal': 1,
-        'menstruation': 0,
-        'delivery': 0,
-        'migraine_days_per_month': 8,
-        'p_stress': 0.7,
-        'p_hormones': 0.2,
-        'p_sleep': 0.6,
-        'p_weather': 0.3,
-        'p_meals': 0.8,
-        'migraine_probability': 0.65,
-        'migraine': 0  # This would be the target in training, 0 for prediction
+        'time': '2024-01-15 14:00:00',
+        'stressLevel.value': 7,
+        'mood.value': 3,
+        'foodIntake.skippedBreakfast': 1,
+        'foodIntake.skippedLunch': 0,
+        'foodIntake.skippedDinner': 0,
+        'activity_index': 25,
+        'intensity': 0,  # No current migraine
+        'duration_m': 0,
+        'predictedStress': 6.5
     }])
     
-    # User context - you can get this from user input
+    # User context
     user_symptoms = "light sensitivity, fatigue"
     user_triggers = "stress, missed meals"
     
@@ -65,9 +60,9 @@ def main():
         
     except Exception as e:
         print(f"❌ Error during prediction: {e}")
-        print("💡 Tip: Make sure your input data matches the training data format")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
     main()
-    

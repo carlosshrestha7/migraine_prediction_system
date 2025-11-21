@@ -1,6 +1,6 @@
 # migraine_model.py
 """
-Migraine prediction ML model
+Migraine prediction ML model - UPDATED for your data structure
 """
 
 import pandas as pd
@@ -10,31 +10,20 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report, accuracy_score, roc_auc_score
 import joblib
 import warnings
+from datetime import datetime
 
 warnings.filterwarnings('ignore')
 
 
 class MigrainePredictionModel:
     """
-    ML Model for predicting migraine occurrence, intensity, and duration
+    ML Model for predicting migraine occurrence - UPDATED for your CSV structure
     """
 
     def __init__(self):
         self.occurrence_model = None
-        self.intensity_model = None
         self.scaler = StandardScaler()
         self.feature_importance = {}
-
-        # Feature weights by category
-        self.feature_weights = {
-            'sleep': 0.25,
-            'stress': 0.20,
-            'food_intake': 0.15,
-            'weather': 0.10,
-            'hormonal': 0.15,
-            'mood': 0.10,
-            'activity': 0.05
-        }
 
     def _convert_to_numeric(self, series, default=0):
         """Safely convert series to numeric, handling strings and edge cases"""
@@ -53,90 +42,70 @@ class MigrainePredictionModel:
 
     def engineer_features(self, df, gender='female'):
         """
-        Create engineered features from health_data CSV structure
+        Create engineered features from YOUR actual CSV structure
         """
         features = pd.DataFrame()
 
         # Time-based features
-        if 'timestamp' in df.columns:
-            df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', errors='coerce')
-            features['hour_of_day'] = df['datetime'].dt.hour.fillna(0)
+        if 'time' in df.columns:
+            df['datetime'] = pd.to_datetime(df['time'], errors='coerce')
+            features['hour_of_day'] = df['datetime'].dt.hour.fillna(12)
             features['day_of_week'] = df['datetime'].dt.dayofweek.fillna(0)
-            features['day_of_month'] = df['datetime'].dt.day.fillna(0)
-            features['month'] = df['datetime'].dt.month.fillna(0)
-        elif 'timestamp_dt' in df.columns:
-            df['datetime'] = pd.to_datetime(df['timestamp_dt'], errors='coerce')
-            features['hour_of_day'] = df['datetime'].dt.hour.fillna(0)
-            features['day_of_week'] = df['datetime'].dt.dayofweek.fillna(0)
-            features['day_of_month'] = df['datetime'].dt.day.fillna(0)
-            features['month'] = df['datetime'].dt.month.fillna(0)
+            features['is_weekend'] = (features['day_of_week'] >= 5).astype(int)
         else:
-            features['hour_of_day'] = 0
+            features['hour_of_day'] = 12
             features['day_of_week'] = 0
-            features['day_of_month'] = 0
-            features['month'] = 0
+            features['is_weekend'] = 0
 
-        # Core health features from your dataset
-        features['stress_intensity'] = self._get_column(df, 'stress_intensity', 'stress')
-        features['sleep_duration'] = self._get_column(df, 'sleep_duration')
-        features['sleep_deficit'] = self._get_column(df, 'sleep_deficit')
-        features['missed_meal'] = self._get_column(df, 'missed_meal')
-        features['menstruation'] = self._get_column(df, 'menstruation')
-        features['delivery'] = self._get_column(df, 'delivery')
-        features['migraine_days_per_month'] = self._get_column(df, 'migraine_days_per_month')
-
-        # Probability features (if available)
-        features['p_stress'] = self._get_column(df, 'p_stress')
-        features['p_hormones'] = self._get_column(df, 'p_hormones')
-        features['p_sleep'] = self._get_column(df, 'p_sleep')
-        features['p_weather'] = self._get_column(df, 'p_weather')
-        features['p_meals'] = self._get_column(df, 'p_meals')
-        features['migraine_probability'] = self._get_column(df, 'migraine_probability')
-
-        # Derived features
-        features['sleep_quality'] = 1 / (1 + features['sleep_deficit'])  # Inverse of deficit
-        features['is_well_rested'] = (features['sleep_duration'] >= 7).astype(int)
-        features['high_stress'] = (features['stress_intensity'] > 7).astype(int)
-        features['hormonal_event'] = (features['menstruation'] | features['delivery']).astype(int)
+        # Core features from YOUR dataset
+        # Stress features
+        features['stress_level'] = self._get_column(df, 'stressLevel.value', 'predictedStress', 'originalPredictedStress', default=5)
+        features['high_stress'] = (features['stress_level'] > 7).astype(int)
+        
+        # Mood features
+        features['mood_value'] = self._get_column(df, 'mood.value', default=5)
+        features['low_mood'] = (features['mood_value'] < 4).astype(int)
+        
+        # Food intake features
+        features['skipped_breakfast'] = self._get_column(df, 'foodIntake.skippedBreakfast', 'foodIntake.hadBreakfast', default=0)
+        features['skipped_lunch'] = self._get_column(df, 'foodIntake.skippedLunch', 'foodIntake.hadLunch', default=0)
+        features['skipped_dinner'] = self._get_column(df, 'foodIntake.skippedDinner', 'foodIntake.hadDinner', default=0)
+        features['total_meals_skipped'] = features['skipped_breakfast'] + features['skipped_lunch'] + features['skipped_dinner']
+        features['missed_meals'] = (features['total_meals_skipped'] > 0).astype(int)
+        
+        # Activity features
+        features['activity_index'] = self._get_column(df, 'activity_index', default=50)
+        features['sedentary'] = (features['activity_index'] < 30).astype(int)
+        
+        # Migraine history features (using available columns)
+        features['has_symptoms'] = self._get_column(df, 'symptoms', default=0)
+        features['has_triggers'] = self._get_column(df, 'triggers', default=0)
+        features['migraine_intensity'] = self._get_column(df, 'intensity', default=0)
+        features['took_medication'] = self._get_column(df, 'tookMedication', default=0)
+        
+        # Duration features
+        features['duration_minutes'] = self._get_column(df, 'duration_m', default=0)
+        
+        # Prediction features
+        features['predicted_stress'] = self._get_column(df, 'predictedStress', default=5)
+        features['original_predicted_stress'] = self._get_column(df, 'originalPredictedStress', default=5)
+        
+        # Create migraine target variable from available data
+        # If we have intensity > 0 or symptoms present, consider it a migraine
+        features['migraine_occurrence'] = (
+            (features['migraine_intensity'] > 0) | 
+            (features['has_symptoms'] > 0)
+        ).astype(int)
 
         # Interaction features
-        features['stress_sleep_interaction'] = features['stress_intensity'] * features['sleep_deficit']
-        features['stress_meal_interaction'] = features['stress_intensity'] * features['missed_meal']
-        features['hormone_stress_interaction'] = features['hormonal_event'] * features['stress_intensity']
+        features['stress_mood_interaction'] = features['stress_level'] * (10 - features['mood_value'])
+        features['stress_meals_interaction'] = features['stress_level'] * features['total_meals_skipped']
+        features['mood_activity_interaction'] = features['mood_value'] * features['activity_index']
 
-        # Rolling averages (if enough data per person)
-        if 'person_id' in df.columns and len(df) > 100:
-            # Group by person for rolling calculations
-            for person_id in df['person_id'].unique()[:100]:  # Limit for performance
-                person_mask = df['person_id'] == person_id
-                person_indices = df[person_mask].index
-
-                if len(person_indices) > 7:
-                    features.loc[person_indices, 'avg_stress_7d'] = (
-                        features.loc[person_indices, 'stress_intensity']
-                        .rolling(window=7, min_periods=1).mean()
-                    )
-                    features.loc[person_indices, 'avg_sleep_7d'] = (
-                        features.loc[person_indices, 'sleep_duration']
-                        .rolling(window=7, min_periods=1).mean()
-                    )
-
-        # Fill rolling averages if not calculated
-        if 'avg_stress_7d' not in features.columns:
-            features['avg_stress_7d'] = features['stress_intensity']
-        if 'avg_sleep_7d' not in features.columns:
-            features['avg_sleep_7d'] = features['sleep_duration']
-
-        # Previous day features (shifted by person if possible)
-        if 'person_id' in df.columns:
-            features['prev_stress'] = df.groupby('person_id')['stress_intensity'].shift(1).fillna(0)
-            if 'migraine' in df.columns:
-                features['prev_migraine'] = df.groupby('person_id')['migraine'].shift(1).fillna(0)
-        else:
-            features['prev_stress'] = features['stress_intensity'].shift(1).fillna(0)
-
-        # Gender-specific features
-        features['gender_female'] = 1 if gender.lower() == 'female' else 0
+        # Time-of-day features
+        features['is_morning'] = ((features['hour_of_day'] >= 6) & (features['hour_of_day'] < 12)).astype(int)
+        features['is_afternoon'] = ((features['hour_of_day'] >= 12) & (features['hour_of_day'] < 18)).astype(int)
+        features['is_evening'] = ((features['hour_of_day'] >= 18) | (features['hour_of_day'] < 6)).astype(int)
 
         # Fill any remaining NaN values
         features = features.fillna(0)
@@ -145,6 +114,7 @@ class MigrainePredictionModel:
         for col in features.columns:
             features[col] = self._convert_to_numeric(features[col])
 
+        print(f"🔧 Engineered {len(features.columns)} features from your data")
         return features
 
     def train(self, df, gender='female', sample_size=None):
@@ -158,27 +128,28 @@ class MigrainePredictionModel:
         print("Engineering features...")
         features = self.engineer_features(df, gender)
 
-        # Prepare target variable - use 'migraine' column
-        if 'migraine' not in df.columns:
-            raise ValueError("'migraine' column not found in dataset!")
+        # Use the engineered migraine_occurrence as target
+        if 'migraine_occurrence' not in features.columns:
+            raise ValueError("Could not create migraine target variable from available data!")
 
-        y_occurrence = self._convert_to_numeric(df['migraine'], 0)
-        y_occurrence = (y_occurrence > 0).astype(int)
+        y_occurrence = features['migraine_occurrence']
+        
+        # Remove the target from features
+        X = features.drop('migraine_occurrence', axis=1)
 
         # Remove invalid rows
-        valid_idx = (y_occurrence.notna()) & (features.notna().all(axis=1))
+        valid_idx = (y_occurrence.notna()) & (X.notna().all(axis=1))
 
         if valid_idx.sum() == 0:
             raise ValueError("No valid training data found. Please check your CSV file.")
 
-        X = features[valid_idx]
+        X = X[valid_idx]
         y_occurrence = y_occurrence[valid_idx]
 
         print(f"\n✅ Training with {len(X)} valid samples")
         print(f"📊 Features used: {len(X.columns)}")
         print(f"🔴 Migraine occurrences: {y_occurrence.sum():,} ({y_occurrence.sum() / len(y_occurrence) * 100:.2f}%)")
-        print(
-            f"🟢 Non-migraine days: {(~y_occurrence.astype(bool)).sum():,} ({(~y_occurrence.astype(bool)).sum() / len(y_occurrence) * 100:.2f}%)")
+        print(f"🟢 Non-migraine days: {(~y_occurrence.astype(bool)).sum():,} ({(~y_occurrence.astype(bool)).sum() / len(y_occurrence) * 100:.2f}%)")
 
         if y_occurrence.sum() < 10:
             print("⚠️  WARNING: Very few migraine occurrences in data. Model may not be reliable.")
@@ -248,6 +219,10 @@ class MigrainePredictionModel:
         # Ensure we have features to work with
         if len(features) == 0:
             return self._get_default_prediction()
+        
+        # Remove target column if present
+        if 'migraine_occurrence' in features.columns:
+            features = features.drop('migraine_occurrence', axis=1)
             
         X_scaled = self.scaler.transform(features)
 
@@ -258,7 +233,7 @@ class MigrainePredictionModel:
         if occurrence_prob < 0.20:
             risk_band = "green"
             risk_label = "Low Risk"
-            risk_message = "Low probability of migraine today"
+            risk_message = "Low probability of migraine"
         elif occurrence_prob < 0.50:
             risk_band = "yellow"
             risk_label = "Moderate Risk"
@@ -301,16 +276,16 @@ class MigrainePredictionModel:
         """Identify current risk factors"""
         risk_factors = []
 
-        if features.get('stress_intensity', 0) > 7:
+        if features.get('stress_level', 0) > 7:
             risk_factors.append("High stress level")
-        if features.get('sleep_deficit', 0) > 2:
-            risk_factors.append("Sleep deficit")
-        if features.get('missed_meal', 0) > 0:
+        if features.get('total_meals_skipped', 0) > 0:
             risk_factors.append("Missed meals")
-        if features.get('hormonal_event', 0) > 0:
-            risk_factors.append("Hormonal changes")
-        if features.get('sleep_duration', 0) < 6:
-            risk_factors.append("Insufficient sleep")
+        if features.get('low_mood', 0) > 0:
+            risk_factors.append("Low mood")
+        if features.get('sedentary', 0) > 0:
+            risk_factors.append("Low activity level")
+        if features.get('high_stress', 0) > 0:
+            risk_factors.append("Elevated stress")
 
         return risk_factors
 
@@ -319,51 +294,51 @@ class MigrainePredictionModel:
         recommendations = []
 
         # Stress management
-        if features.get('stress_intensity', 0) > 7:
+        if features.get('stress_level', 0) > 7:
             recommendations.append({
                 'category': 'Stress Management',
                 'action': 'Your stress level is high. Practice deep breathing or meditation',
                 'priority': 'high' if probability > 0.5 else 'medium'
             })
 
-        # Sleep recommendations
-        if features.get('sleep_deficit', 0) > 1:
-            recommendations.append({
-                'category': 'Sleep',
-                'action': f"You have a sleep deficit. Try to rest early tonight",
-                'priority': 'high' if probability > 0.5 else 'medium'
-            })
-
         # Meal planning
-        if features.get('missed_meal', 0) > 0:
+        if features.get('missed_meals', 0) > 0:
             recommendations.append({
                 'category': 'Nutrition',
                 'action': 'Avoid skipping meals. Have regular, balanced meals',
                 'priority': 'high'
             })
 
+        # Activity recommendations
+        if features.get('sedentary', 0) > 0:
+            recommendations.append({
+                'category': 'Activity',
+                'action': 'Light exercise or a short walk may help reduce stress',
+                'priority': 'medium'
+            })
+
+        # Mood management
+        if features.get('low_mood', 0) > 0:
+            recommendations.append({
+                'category': 'Mood',
+                'action': 'Take breaks and engage in enjoyable activities',
+                'priority': 'medium'
+            })
+
         # Preventive measures for high risk
         if probability > 0.6:
             recommendations.append({
                 'category': 'Prevention',
-                'action': 'Consider taking preventive medication if prescribed',
+                'action': 'Consider taking preventive measures and stay hydrated',
                 'priority': 'high'
             })
 
-        # Hydration
+        # Hydration (always include)
         recommendations.append({
             'category': 'Hydration',
             'action': 'Ensure you stay well hydrated throughout the day',
             'priority': 'medium' if probability > 0.4 else 'low'
         })
-
-        # Activity
-        if features.get('stress_intensity', 0) > 5:
-            recommendations.append({
-                'category': 'Activity',
-                'action': 'Light exercise or a short walk may help reduce stress',
-                'priority': 'low'
-            })
 
         return recommendations
 
@@ -372,8 +347,7 @@ class MigrainePredictionModel:
         model_data = {
             'occurrence_model': self.occurrence_model,
             'scaler': self.scaler,
-            'feature_importance': self.feature_importance,
-            'feature_weights': self.feature_weights
+            'feature_importance': self.feature_importance
         }
         joblib.dump(model_data, filepath)
         print(f"\n✅ Model saved to {filepath}")
@@ -384,7 +358,6 @@ class MigrainePredictionModel:
         self.occurrence_model = model_data['occurrence_model']
         self.scaler = model_data['scaler']
         self.feature_importance = model_data['feature_importance']
-        self.feature_weights = model_data['feature_weights']
         print(f"✅ Model loaded from {filepath}")
         return self
 
@@ -398,7 +371,7 @@ class ModelTrainer:
         print(f"📂 Loading data from {filepath}...")
         df = pd.read_csv(filepath, low_memory=False)
         print(f"✅ Loaded {len(df):,} records")
-        print(f"📋 Columns found: {list(df.columns)}")
+        print(f"📋 Columns found: {len(df.columns)} columns")
         return df
 
     @staticmethod
@@ -409,57 +382,17 @@ class ModelTrainer:
         print("=" * 60)
         print(f"Total records: {len(df):,}")
 
-        # Check for required columns
-        required_cols = ['migraine', 'stress_intensity', 'sleep_duration']
-        missing_cols = [col for col in required_cols if col not in df.columns]
-        if missing_cols:
-            print(f"⚠️  WARNING: Missing required columns: {missing_cols}")
-
-        # Date range
-        if 'timestamp' in df.columns:
-            try:
-                dates = pd.to_datetime(df['timestamp'], unit='s', errors='coerce')
-                valid_dates = dates.dropna()
-                if len(valid_dates) > 0:
-                    print(f"📅 Date range: {valid_dates.min().date()} to {valid_dates.max().date()}")
-                    print(f"   Duration: {(valid_dates.max() - valid_dates.min()).days} days")
-            except Exception as e:
-                print(f"⚠️  Could not parse dates: {e}")
-
-        # Migraine statistics
-        if 'migraine' in df.columns:
-            migraine_numeric = pd.to_numeric(df['migraine'], errors='coerce')
-            migraine_count = (migraine_numeric > 0).sum()
-            total_valid = migraine_numeric.notna().sum()
-            if total_valid > 0:
-                print(f"\n🔴 Migraine Events: {migraine_count:,} ({migraine_count / total_valid * 100:.2f}%)")
-                print(
-                    f"🟢 Healthy Days: {total_valid - migraine_count:,} ({(total_valid - migraine_count) / total_valid * 100:.2f}%)")
-
-        # Stress statistics
-        if 'stress_intensity' in df.columns:
-            stress = pd.to_numeric(df['stress_intensity'], errors='coerce')
-            print(f"\n😰 Stress Statistics:")
-            print(f"   Mean: {stress.mean():.2f}")
-            print(f"   High stress days (>7): {(stress > 7).sum():,}")
-
-        # Sleep statistics
-        if 'sleep_duration' in df.columns:
-            sleep = pd.to_numeric(df['sleep_duration'], errors='coerce')
-            print(f"\n😴 Sleep Statistics:")
-            print(f"   Mean duration: {sleep.mean():.2f} hours")
-            print(f"   Insufficient sleep (<6h): {(sleep < 6).sum():,}")
+        # Check for important columns
+        important_cols = ['stressLevel.value', 'mood.value', 'foodIntake.skippedBreakfast', 'intensity']
+        available_cols = [col for col in important_cols if col in df.columns]
+        print(f"✅ Available important columns: {available_cols}")
 
         # Data completeness
-        print(f"\n📉 Missing Data:")
+        print(f"\n📉 Missing Data (top 10 columns with most missing data):")
         missing = (df.isnull().sum() / len(df) * 100).sort_values(ascending=False)
-        has_missing = False
-        for col, pct in missing.items():
+        for col, pct in list(missing.items())[:10]:
             if pct > 0:
-                has_missing = True
                 print(f"   {col}: {pct:.1f}%")
-        if not has_missing:
-            print("   ✅ No missing data!")
 
         print("=" * 60)
         return True
@@ -493,12 +426,10 @@ if __name__ == "__main__":
     print("=" * 60 + "\n")
 
     # Train with your CSV file
-    # Use sample_size to limit data for faster training (optional)
     model = ModelTrainer.train_model_from_csv(
         csv_filepath='event_dump.csv',
         gender='female',
-        save_path='migraine_model.pkl',
-        sample_size=100000  # Use 100k samples for faster training, or None for all data
+        save_path='migraine_model.pkl'
     )
 
     print("\n" + "=" * 60)
