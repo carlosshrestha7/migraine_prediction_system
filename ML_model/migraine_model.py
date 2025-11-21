@@ -104,7 +104,7 @@ class MigrainePredictionModel:
 
         # Time-of-day features
         features['is_morning'] = ((features['hour_of_day'] >= 6) & (features['hour_of_day'] < 12)).astype(int)
-        features['is_afternoon'] = ((features['hour_of_day'] >= 12) & (features['hour_of_day'] < 18)).ast(int)
+        features['is_afternoon'] = ((features['hour_of_day'] >= 12) & (features['hour_of_day'] < 18)).astype(int)  # FIXED: astype instead of ast
         features['is_evening'] = ((features['hour_of_day'] >= 18) | (features['hour_of_day'] < 6)).astype(int)
 
         # Fill any remaining NaN values

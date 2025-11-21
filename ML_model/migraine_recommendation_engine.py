@@ -113,22 +113,32 @@ class MigraineRecommendationEngine:
         Analyze user context to personalize recommendations
         """
         context = {
-            'high_stress': features.get('stress_intensity', 0) > 6,
+            'high_stress': features.get('stress_level', 0) > 6,
             'sleep_deprivation': features.get('sleep_duration', 8) < 6,  # Less than 6 hours sleep
-            'missed_meals': features.get('missed_meal', 0) > 0,
-            'sedentary': features.get('activity_index', 50) < 30,
+            'missed_meals': features.get('missed_meals', 0) > 0 or features.get('total_meals_skipped', 0) > 0,
+            'sedentary': features.get('activity_index', 50) < 30 or features.get('sedentary', 0) > 0,
             'dehydration': True,  # Always recommend hydration
-            'fatigue': features.get('sleep_deficit', 0) > 2  # High sleep deficit
+            'fatigue': features.get('low_mood', 0) > 0 or features.get('mood_value', 5) < 4
         }
         
         # Add symptom-based context
         if symptoms:
             symptom_list = [s.strip().lower() for s in str(symptoms).split(',')]
             context.update({
-                'light_sensitivity': any(s in ['light sensitivity', 'photophobia'] for s in symptom_list),
-                'sound_sensitivity': any(s in ['sound sensitivity', 'phonophobia'] for s in symptom_list),
-                'visual_aura': any(s in ['aura', 'visual disturbances'] for s in symptom_list),
-                'nausea': 'nausea' in symptom_list
+                'light_sensitivity': any(s in ['light sensitivity', 'photophobia', 'bright light'] for s in symptom_list),
+                'sound_sensitivity': any(s in ['sound sensitivity', 'phonophobia', 'noise'] for s in symptom_list),
+                'visual_aura': any(s in ['aura', 'visual disturbances', 'blurry vision'] for s in symptom_list),
+                'nausea': 'nausea' in symptom_list or 'sick' in symptom_list
+            })
+        
+        # Add trigger-based context
+        if triggers:
+            trigger_list = [t.strip().lower() for t in str(triggers).split(',')]
+            context.update({
+                'stress': any(t in ['stress', 'anxiety', 'pressure'] for t in trigger_list),
+                'missed_meals': any(t in ['hunger', 'missed meals', 'food'] for t in trigger_list) or context['missed_meals'],
+                'sleep_issues': any(t in ['sleep', 'fatigue', 'tired'] for t in trigger_list),
+                'weather': any(t in ['weather', 'pressure', 'temperature'] for t in trigger_list)
             })
         
         return context
@@ -278,7 +288,7 @@ class MigraineRecommendationEngine:
         urgency_order = {'high': 3, 'medium': 2, 'low': 1}
         
         # Sort by urgency (high first), then by type
-        recommendations.sort(key=lambda x: (urgency_order[x['urgency']], x['type']), reverse=True)
+        recommendations.sort(key=lambda x: (urgency_order.get(x.get('urgency', 'low'), 0), x.get('type', '')), reverse=True)
         
         return recommendations
 
@@ -331,7 +341,7 @@ class MigraineRecommendationEngine:
             "☀️ Wear sunglasses in bright light if light-sensitive"
         ])
         
-        return tips[:3]  # Return top 3 most relevant
+        return tips[:4]  # Return top 4 most relevant
 
 
 def format_recommendations_for_display(prediction_output):
@@ -345,27 +355,30 @@ def format_recommendations_for_display(prediction_output):
         'green': '🟢', 'yellow': '🟡', 'orange': '🟠', 'red': '🔴'
     }
     
-    output.append(f"{risk_colors[prediction_output['risk_band']]} "
+    output.append(f"{risk_colors.get(prediction_output['risk_band'], '⚪')} "
                  f"{prediction_output['risk_label']} - {prediction_output['probability']}% probability")
     
     # Key recommendations
-    output.append("\n🎯 **Key Actions:**")
-    for i, rec in enumerate(prediction_output.get('key_recommendations', []), 1):
-        output.append(f"{i}. {rec['action']}")
-        output.append(f"   💡 Why: {rec['reason']}")
+    if prediction_output.get('key_recommendations'):
+        output.append("\n🎯 **Key Actions:**")
+        for i, rec in enumerate(prediction_output['key_recommendations'], 1):
+            output.append(f"{i}. {rec.get('action', 'Unknown action')}")
+            output.append(f"   💡 Why: {rec.get('reason', 'General prevention')}")
     
     # Quick actions
-    output.append("\n⚡ **Quick Steps Now:**")
-    for action in prediction_output.get('quick_actions', []):
-        output.append(f"• {action}")
+    if prediction_output.get('quick_actions'):
+        output.append("\n⚡ **Quick Steps Now:**")
+        for action in prediction_output['quick_actions']:
+            output.append(f"• {action}")
     
     # Prevention tips
-    output.append("\n🛡️ **Prevention Tips:**")
-    for tip in prediction_output.get('prevention_tips', []):
-        output.append(f"• {tip}")
+    if prediction_output.get('prevention_tips'):
+        output.append("\n🛡️ **Prevention Tips:**")
+        for tip in prediction_output['prevention_tips']:
+            output.append(f"• {tip}")
     
     # Risk factors
-    if 'top_risk_factors' in prediction_output and prediction_output['top_risk_factors']:
+    if prediction_output.get('top_risk_factors'):
         output.append("\n⚠️ **Current Risk Factors:**")
         for factor in prediction_output['top_risk_factors']:
             output.append(f"• {factor}")

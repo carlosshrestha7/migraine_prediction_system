@@ -4,6 +4,12 @@ Enhanced prediction script with colors and better formatting
 """
 
 import pandas as pd
+import sys
+import os
+
+# Add current directory to path to ensure imports work
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from enhanced_migraine_model import EnhancedMigrainePredictionModel, format_recommendations_for_display
 
 class Color:
@@ -70,18 +76,21 @@ def main():
         )
         
         # Display formatted results with colors
-        risk_color = colorize_risk(result['risk_band'], "")
+        risk_color = result['risk_band']
         
         print(f"\n{Color.CYAN}{'='*60}{Color.END}")
         print(f"{Color.BOLD}🧠 MIGRAINE PREDICTION RESULTS{Color.END}")
         print(f"{Color.CYAN}{'='*60}{Color.END}")
         
         # Risk header with color
-        print(f"\n{risk_color}{Color.BOLD}📊 RISK LEVEL: {result['risk_label']} ({result['probability']}% probability){Color.END}")
-        print(f"{Color.WHITE}💡 {result['risk_message']}{Color.END}")
+        risk_display = colorize_risk(risk_color, f"📊 RISK LEVEL: {result['risk_label']} ({result['probability']}% probability)")
+        print(f"\n{risk_display}")
+        print(f"{Color.CYAN}💡 {result['risk_message']}{Color.END}")
         
         # Enhanced output
         formatted_output = format_recommendations_for_display(result)
+        
+        # Colorize the output
         for line in formatted_output.split('\n'):
             if '🟢' in line:
                 print(Color.GREEN + line + Color.END)
@@ -91,6 +100,8 @@ def main():
                 print(Color.ORANGE + line + Color.END)
             elif '🔴' in line:
                 print(Color.RED + line + Color.END)
+            elif '🎯' in line or '⚡' in line or '🛡️' in line or '⚠️' in line:
+                print(Color.BLUE + line + Color.END)
             else:
                 print(line)
                 

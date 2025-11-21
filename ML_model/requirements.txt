@@ -3,7 +3,8 @@ scikit-learn>=1.2.0
 joblib>=1.2.0
 numpy>=1.21.0
 matplotlib>=3.5.0
-speechrecognition>=3.8.1
-pyaudio>=0.2.11
-pyttsx3>=2.90
 seaborn>=0.11.2
+speechrecognition>=3.8.1
+pyttsx3>=2.90
+pyaudio>=0.2.11; sys_platform != 'linux'
+portaudio19-dev; sys_platform == 'linux'
