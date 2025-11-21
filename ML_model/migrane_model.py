@@ -475,7 +475,7 @@ if __name__ == "__main__":
     # Train with your CSV file
     # Use sample_size to limit data for faster training (optional)
     model = ModelTrainer.train_model_from_csv(
-        csv_filepath='synthetic_data_10_000/health_data_100000_365.csv',
+        csv_filepath='synthetic_data_10_000/health_data_100000_90.csv',
         gender='female',
         save_path='migraine_model.pkl',
         sample_size=100000  # Use 100k samples for faster training, or None for all data
