@@ -1,28 +1,46 @@
 # predict_migraine.py
 """
-Prediction script with enhanced recommendations - UPDATED for your data
+Enhanced prediction script with colors and better formatting
 """
 
 import pandas as pd
 from enhanced_migraine_model import EnhancedMigrainePredictionModel, format_recommendations_for_display
 
+class Color:
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    ORANGE = '\033[33m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    BOLD = '\033[1m'
+    END = '\033[0m'
+
+def colorize_risk(risk_band, text):
+    colors = {
+        'green': Color.GREEN,
+        'yellow': Color.YELLOW, 
+        'orange': Color.ORANGE,
+        'red': Color.RED
+    }
+    return f"{colors.get(risk_band, Color.CYAN)}{text}{Color.END}"
 
 def main():
     # Load the enhanced model
-    print("Loading migraine prediction model...")
+    print(f"{Color.CYAN}🌀 Loading migraine prediction model...{Color.END}")
     model = EnhancedMigrainePredictionModel()
     
     try:
         model.load_model('migraine_model.pkl')
-        print("✅ Model loaded successfully!")
+        print(f"{Color.GREEN}✅ Model loaded successfully!{Color.END}")
     except FileNotFoundError:
-        print("❌ Model file not found. Please train the model first using train_model.py")
+        print(f"{Color.RED}❌ Model file not found. Please train the model first using train_model.py{Color.END}")
         return
     except Exception as e:
-        print(f"❌ Error loading model: {e}")
+        print(f"{Color.RED}❌ Error loading model: {e}{Color.END}")
         return
     
-    # Example user data - using YOUR actual column names
+    # Example user data
     sample_data = pd.DataFrame([{
         'time': '2024-01-15 14:00:00',
         'stressLevel.value': 7,
@@ -31,7 +49,7 @@ def main():
         'foodIntake.skippedLunch': 0,
         'foodIntake.skippedDinner': 0,
         'activity_index': 25,
-        'intensity': 0,  # No current migraine
+        'intensity': 0,
         'duration_m': 0,
         'predictedStress': 6.5
     }])
@@ -40,7 +58,7 @@ def main():
     user_symptoms = "light sensitivity, fatigue"
     user_triggers = "stress, missed meals"
     
-    print("Making prediction with personalized recommendations...")
+    print(f"{Color.BLUE}🎯 Making prediction with personalized recommendations...{Color.END}")
     
     try:
         # Make prediction with enhanced recommendations
@@ -51,18 +69,37 @@ def main():
             user_triggers=user_triggers
         )
         
-        # Display formatted results
-        print("\n" + "=" * 60)
-        print("MIGRAINE PREDICTION RESULTS")
-        print("=" * 60)
-        print(format_recommendations_for_display(result))
-        print("=" * 60)
+        # Display formatted results with colors
+        risk_color = colorize_risk(result['risk_band'], "")
+        
+        print(f"\n{Color.CYAN}{'='*60}{Color.END}")
+        print(f"{Color.BOLD}🧠 MIGRAINE PREDICTION RESULTS{Color.END}")
+        print(f"{Color.CYAN}{'='*60}{Color.END}")
+        
+        # Risk header with color
+        print(f"\n{risk_color}{Color.BOLD}📊 RISK LEVEL: {result['risk_label']} ({result['probability']}% probability){Color.END}")
+        print(f"{Color.WHITE}💡 {result['risk_message']}{Color.END}")
+        
+        # Enhanced output
+        formatted_output = format_recommendations_for_display(result)
+        for line in formatted_output.split('\n'):
+            if '🟢' in line:
+                print(Color.GREEN + line + Color.END)
+            elif '🟡' in line:
+                print(Color.YELLOW + line + Color.END)
+            elif '🟠' in line:
+                print(Color.ORANGE + line + Color.END)
+            elif '🔴' in line:
+                print(Color.RED + line + Color.END)
+            else:
+                print(line)
+                
+        print(f"{Color.CYAN}{'='*60}{Color.END}")
         
     except Exception as e:
-        print(f"❌ Error during prediction: {e}")
+        print(f"{Color.RED}❌ Error during prediction: {e}{Color.END}")
         import traceback
         traceback.print_exc()
-
 
 if __name__ == "__main__":
     main()
