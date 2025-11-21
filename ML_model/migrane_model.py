@@ -2,31 +2,31 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report, accuracy_score, roc_auc_score
+from sklearn.metrics import classification_report, mean_squared_error, accuracy_score, roc_auc_score
 import joblib
 import warnings
-from pathlib import Path
 
 warnings.filterwarnings('ignore')
 
 
 class MigrainePredictionModel:
     """
-    ML Model for predicting migraine occurrence with multi-source data support
-    Supports health_data.csv and weather_data.csv integration
+    ML Model for predicting migraine occurrence, intensity, and duration
+    Updated to handle health_data CSV structure
     """
 
     def __init__(self):
         self.occurrence_model = None
+        self.intensity_model = None
         self.scaler = StandardScaler()
         self.feature_importance = {}
 
         # Feature weights by category
         self.feature_weights = {
-            'sleep': 0.20,
+            'sleep': 0.25,
             'stress': 0.20,
-            'food_intake': 0.12,
-            'weather': 0.18,  # Increased weight for weather
+            'food_intake': 0.15,
+            'weather': 0.10,
             'hormonal': 0.15,
             'mood': 0.10,
             'activity': 0.05
@@ -36,6 +36,7 @@ class MigrainePredictionModel:
         """Safely convert series to numeric, handling strings and edge cases"""
         if series.dtype == 'bool':
             return series.astype(int)
+
         numeric_series = pd.to_numeric(series, errors='coerce')
         return numeric_series.fillna(default)
 
@@ -48,7 +49,7 @@ class MigrainePredictionModel:
 
     def engineer_features(self, df, gender='female'):
         """
-        Create engineered features from health_data with optional weather data
+        Create engineered features from health_data CSV structure
         """
         features = pd.DataFrame()
 
@@ -71,7 +72,7 @@ class MigrainePredictionModel:
             features['day_of_month'] = 0
             features['month'] = 0
 
-        # Core health features
+        # Core health features from your dataset
         features['stress_intensity'] = self._get_column(df, 'stress_intensity', 'stress')
         features['sleep_duration'] = self._get_column(df, 'sleep_duration')
         features['sleep_deficit'] = self._get_column(df, 'sleep_deficit')
@@ -80,7 +81,7 @@ class MigrainePredictionModel:
         features['delivery'] = self._get_column(df, 'delivery')
         features['migraine_days_per_month'] = self._get_column(df, 'migraine_days_per_month')
 
-        # Probability features
+        # Probability features (if available)
         features['p_stress'] = self._get_column(df, 'p_stress')
         features['p_hormones'] = self._get_column(df, 'p_hormones')
         features['p_sleep'] = self._get_column(df, 'p_sleep')
@@ -88,69 +89,21 @@ class MigrainePredictionModel:
         features['p_meals'] = self._get_column(df, 'p_meals')
         features['migraine_probability'] = self._get_column(df, 'migraine_probability')
 
-        # === WEATHER FEATURES (if available) ===
-        weather_features = [
-            'temp_min', 'temp_max', 'temp_mean', 'temp_quick_change',
-            'wind_min', 'wind_max', 'wind_mean', 'wind_quick_change',
-            'pressure_min', 'pressure_max', 'pressure_mean', 'pressure_quick_change',
-            'sun_irr_min', 'sun_irr_max', 'sun_irr_mean',
-            'sun_time_min', 'sun_time_max', 'sun_time_mean',
-            'sun_irr_quick_change', 'sun_time_quick_change',
-            'precip_min', 'precip_max', 'precip_mean', 'precip_total',
-            'precipitation_quick_change',
-            'cloud_min', 'cloud_max', 'cloud_mean', 'cloud_quick_change'
-        ]
-
-        for weather_col in weather_features:
-            features[weather_col] = self._get_column(df, weather_col)
-
-        # === WEATHER-DERIVED FEATURES ===
-        # Temperature features
-        features['temp_range'] = features['temp_max'] - features['temp_min']
-        features['is_extreme_temp'] = ((features['temp_mean'] < 5) |
-                                       (features['temp_mean'] > 30)).astype(int)
-        features['is_temp_unstable'] = (features['temp_quick_change'] > 5).astype(int)
-
-        # Pressure features (barometric pressure changes are strong migraine triggers)
-        features['pressure_range'] = features['pressure_max'] - features['pressure_min']
-        features['is_pressure_drop'] = (features['pressure_quick_change'] < -2).astype(int)
-        features['is_low_pressure'] = (features['pressure_mean'] < 1010).astype(int)
-
-        # Wind features
-        features['wind_range'] = features['wind_max'] - features['wind_min']
-        features['is_windy'] = (features['wind_mean'] > 20).astype(int)
-
-        # Precipitation and humidity indicators
-        features['is_rainy'] = (features['precip_total'] > 5).astype(int)
-        features['is_cloudy'] = (features['cloud_mean'] > 70).astype(int)
-
-        # Sun/brightness features
-        features['sun_irr_range'] = features['sun_irr_max'] - features['sun_irr_min']
-        features['is_bright'] = (features['sun_irr_mean'] > 600).astype(int)
-        features['sun_time_range'] = features['sun_time_max'] - features['sun_time_min']
-
-        # === HEALTH-DERIVED FEATURES ===
-        features['sleep_quality'] = 1 / (1 + features['sleep_deficit'])
+        # Derived features
+        features['sleep_quality'] = 1 / (1 + features['sleep_deficit'])  # Inverse of deficit
         features['is_well_rested'] = (features['sleep_duration'] >= 7).astype(int)
         features['high_stress'] = (features['stress_intensity'] > 7).astype(int)
         features['hormonal_event'] = (features['menstruation'] | features['delivery']).astype(int)
 
-        # === INTERACTION FEATURES ===
-        # Health interactions
+        # Interaction features
         features['stress_sleep_interaction'] = features['stress_intensity'] * features['sleep_deficit']
         features['stress_meal_interaction'] = features['stress_intensity'] * features['missed_meal']
         features['hormone_stress_interaction'] = features['hormonal_event'] * features['stress_intensity']
 
-        # Weather-health interactions (key for finding relationships!)
-        features['pressure_stress_interaction'] = features['pressure_quick_change'] * features['stress_intensity']
-        features['temp_change_sleep_interaction'] = features['temp_quick_change'] * features['sleep_deficit']
-        features['weather_hormone_interaction'] = features['pressure_quick_change'] * features['hormonal_event']
-        features['cloudy_stress_interaction'] = features['is_cloudy'] * features['high_stress']
-        features['pressure_sleep_interaction'] = features['is_pressure_drop'] * features['sleep_deficit']
-
-        # === ROLLING AVERAGES ===
+        # Rolling averages (if enough data per person)
         if 'person_id' in df.columns and len(df) > 100:
-            for person_id in df['person_id'].unique()[:100]:
+            # Group by person for rolling calculations
+            for person_id in df['person_id'].unique()[:100]:  # Limit for performance
                 person_mask = df['person_id'] == person_id
                 person_indices = df[person_mask].index
 
@@ -163,28 +116,20 @@ class MigrainePredictionModel:
                         features.loc[person_indices, 'sleep_duration']
                         .rolling(window=7, min_periods=1).mean()
                     )
-                    features.loc[person_indices, 'avg_pressure_7d'] = (
-                        features.loc[person_indices, 'pressure_mean']
-                        .rolling(window=7, min_periods=1).mean()
-                    )
 
         # Fill rolling averages if not calculated
         if 'avg_stress_7d' not in features.columns:
             features['avg_stress_7d'] = features['stress_intensity']
         if 'avg_sleep_7d' not in features.columns:
             features['avg_sleep_7d'] = features['sleep_duration']
-        if 'avg_pressure_7d' not in features.columns:
-            features['avg_pressure_7d'] = features['pressure_mean']
 
-        # === PREVIOUS DAY FEATURES ===
+        # Previous day features (shifted by person if possible)
         if 'person_id' in df.columns:
             features['prev_stress'] = df.groupby('person_id')['stress_intensity'].shift(1).fillna(0)
-            features['prev_pressure'] = df.groupby('person_id')['pressure_mean'].shift(1).fillna(0)
             if 'migraine' in df.columns:
                 features['prev_migraine'] = df.groupby('person_id')['migraine'].shift(1).fillna(0)
         else:
             features['prev_stress'] = features['stress_intensity'].shift(1).fillna(0)
-            features['prev_pressure'] = features['pressure_mean'].shift(1).fillna(0)
 
         # Gender-specific features
         features['gender_female'] = 1 if gender.lower() == 'female' else 0
@@ -206,19 +151,10 @@ class MigrainePredictionModel:
             print(f"📊 Sampling {sample_size} records from {len(df)} total records...")
             df = df.sample(n=sample_size, random_state=42)
 
-        print("🔧 Engineering features...")
+        print("Engineering features...")
         features = self.engineer_features(df, gender)
 
-        # Check which weather features are available
-        weather_cols = [col for col in features.columns if any(
-            w in col for w in ['temp', 'pressure', 'wind', 'sun', 'precip', 'cloud', 'weather']
-        )]
-        if weather_cols:
-            print(f"🌤️  Weather features found: {len(weather_cols)}")
-        else:
-            print("⚠️  No weather data detected - training without weather features")
-
-        # Prepare target variable
+        # Prepare target variable - use 'migraine' column
         if 'migraine' not in df.columns:
             raise ValueError("'migraine' column not found in dataset!")
 
@@ -278,7 +214,7 @@ class MigrainePredictionModel:
 
         print(f"\n📈 Accuracy: {accuracy_score(y_test, y_pred):.4f}")
 
-        if y_test.sum() > 0:
+        if y_test.sum() > 0:  # Only calculate AUC if we have positive samples
             print(f"📊 ROC-AUC Score: {roc_auc_score(y_test, y_pred_proba):.4f}")
 
         print("\n📋 Classification Report:")
@@ -289,33 +225,24 @@ class MigrainePredictionModel:
         importances = self.occurrence_model.feature_importances_
         self.feature_importance = dict(zip(feature_names, importances))
 
-        print("\n🏆 Top 20 Most Important Features:")
+        print("\n🏆 Top 15 Most Important Features:")
         for i, (feat, imp) in enumerate(sorted(self.feature_importance.items(),
-                                               key=lambda x: x[1], reverse=True)[:20], 1):
+                                               key=lambda x: x[1], reverse=True)[:15], 1):
             bar = "█" * int(imp * 100)
-            # Highlight weather-related features
-            emoji = "🌤️ " if any(
-                w in feat for w in ['temp', 'pressure', 'wind', 'sun', 'precip', 'cloud', 'weather']) else "   "
-            print(f"{emoji}{i:2d}. {feat:35s} {imp:6.4f} {bar}")
-
-        # Weather feature importance summary
-        weather_importance = {k: v for k, v in self.feature_importance.items()
-                              if any(w in k for w in ['temp', 'pressure', 'wind', 'sun', 'precip', 'cloud', 'weather'])}
-        if weather_importance:
-            total_weather_imp = sum(weather_importance.values())
-            print(f"\n🌤️  Total Weather Feature Importance: {total_weather_imp:.4f} ({total_weather_imp * 100:.1f}%)")
-            print("    Top weather factors:")
-            for feat, imp in sorted(weather_importance.items(), key=lambda x: x[1], reverse=True)[:5]:
-                print(f"    • {feat}: {imp:.4f}")
+            print(f"  {i:2d}. {feat:30s} {imp:6.4f} {bar}")
 
         print("=" * 60)
         return self
 
     def predict(self, user_data, gender='female'):
-        """Predict migraine occurrence probability"""
+        """
+        Predict migraine occurrence probability
+        """
+        # Engineer features
         features = self.engineer_features(user_data, gender)
         X_scaled = self.scaler.transform(features)
 
+        # Predict occurrence probability
         occurrence_prob = self.occurrence_model.predict_proba(X_scaled)[0][1]
 
         # Calculate risk band
@@ -336,7 +263,10 @@ class MigrainePredictionModel:
             risk_label = "Very High Risk"
             risk_message = "Very high probability of migraine"
 
-        recommendations = self._generate_recommendations(features.iloc[0], occurrence_prob, gender)
+        # Generate recommendations
+        recommendations = self._generate_recommendations(
+            features.iloc[0], occurrence_prob, gender
+        )
 
         return {
             'probability': round(occurrence_prob * 100, 1),
@@ -348,10 +278,9 @@ class MigrainePredictionModel:
         }
 
     def _identify_risk_factors(self, features):
-        """Identify current risk factors including weather"""
+        """Identify current risk factors"""
         risk_factors = []
 
-        # Health factors
         if features.get('stress_intensity', 0) > 7:
             risk_factors.append("High stress level")
         if features.get('sleep_deficit', 0) > 2:
@@ -363,20 +292,10 @@ class MigrainePredictionModel:
         if features.get('sleep_duration', 0) < 6:
             risk_factors.append("Insufficient sleep")
 
-        # Weather factors
-        if features.get('is_pressure_drop', 0) > 0:
-            risk_factors.append("Barometric pressure drop")
-        if features.get('temp_quick_change', 0) > 5:
-            risk_factors.append("Rapid temperature change")
-        if features.get('is_windy', 0) > 0:
-            risk_factors.append("High winds")
-        if features.get('is_bright', 0) > 0:
-            risk_factors.append("Bright sunlight")
-
         return risk_factors
 
     def _generate_recommendations(self, features, probability, gender):
-        """Generate personalized recommendations including weather-based ones"""
+        """Generate personalized recommendations"""
         recommendations = []
 
         # Stress management
@@ -403,29 +322,7 @@ class MigrainePredictionModel:
                 'priority': 'high'
             })
 
-        # Weather-based recommendations
-        if features.get('is_pressure_drop', 0) > 0:
-            recommendations.append({
-                'category': 'Weather Alert',
-                'action': 'Barometric pressure is dropping - stay hydrated and consider preventive measures',
-                'priority': 'high'
-            })
-
-        if features.get('is_bright', 0) > 0:
-            recommendations.append({
-                'category': 'Weather',
-                'action': 'Bright sunlight expected - wear sunglasses and avoid prolonged exposure',
-                'priority': 'medium'
-            })
-
-        if features.get('temp_quick_change', 0) > 5:
-            recommendations.append({
-                'category': 'Weather',
-                'action': 'Rapid temperature changes - dress in layers and stay comfortable',
-                'priority': 'medium'
-            })
-
-        # Preventive measures
+        # Preventive measures for high risk
         if probability > 0.6:
             recommendations.append({
                 'category': 'Prevention',
@@ -439,6 +336,14 @@ class MigrainePredictionModel:
             'action': 'Ensure you stay well hydrated throughout the day',
             'priority': 'medium' if probability > 0.4 else 'low'
         })
+
+        # Activity
+        if features.get('stress_intensity', 0) > 5:
+            recommendations.append({
+                'category': 'Activity',
+                'action': 'Light exercise or a short walk may help reduce stress',
+                'priority': 'low'
+            })
 
         return recommendations
 
@@ -465,7 +370,7 @@ class MigrainePredictionModel:
 
 
 class ModelTrainer:
-    """Handles the complete training pipeline with multi-source data"""
+    """Handles the complete training pipeline"""
 
     @staticmethod
     def load_csv_data(filepath):
@@ -473,49 +378,8 @@ class ModelTrainer:
         print(f"📂 Loading data from {filepath}...")
         df = pd.read_csv(filepath, low_memory=False)
         print(f"✅ Loaded {len(df):,} records")
-        print(f"📋 Columns found: {list(df.columns)[:10]}{'...' if len(df.columns) > 10 else ''}")
+        print(f"📋 Columns found: {list(df.columns)}")
         return df
-
-    @staticmethod
-    def merge_weather_data(health_df, weather_filepath):
-        """
-        Merge weather data with health data based on date
-        """
-        print(f"\n🌤️  Loading weather data from {weather_filepath}...")
-        weather_df = pd.read_csv(weather_filepath)
-        print(f"✅ Loaded {len(weather_df):,} weather records")
-
-        # Convert health data timestamp to date
-        if 'timestamp' in health_df.columns:
-            health_df['date'] = pd.to_datetime(health_df['timestamp'], unit='s', errors='coerce').dt.date
-        elif 'timestamp_dt' in health_df.columns:
-            health_df['date'] = pd.to_datetime(health_df['timestamp_dt'], errors='coerce').dt.date
-        else:
-            print("⚠️  WARNING: No timestamp column found in health data")
-            return health_df
-
-        # Convert weather date to date object
-        weather_df['date'] = pd.to_datetime(weather_df['date'], errors='coerce').dt.date
-
-        # Count records before merge
-        before_count = len(health_df)
-
-        # Merge on date
-        merged_df = health_df.merge(weather_df, on='date', how='left')
-
-        after_count = len(merged_df)
-        matched_weather = merged_df[weather_df.columns[1]].notna().sum()
-
-        print(f"🔗 Merge complete:")
-        print(f"   • Health records: {before_count:,}")
-        print(f"   • Records with weather data: {matched_weather:,} ({matched_weather / before_count * 100:.1f}%)")
-        print(f"   • Total columns: {len(merged_df.columns)}")
-
-        if matched_weather == 0:
-            print("⚠️  WARNING: No matching dates found between health and weather data!")
-            print("   Check that date formats are compatible")
-
-        return merged_df
 
     @staticmethod
     def validate_data(df):
@@ -530,15 +394,6 @@ class ModelTrainer:
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             print(f"⚠️  WARNING: Missing required columns: {missing_cols}")
-
-        # Check for weather columns
-        weather_cols = [col for col in df.columns if any(
-            w in col for w in ['temp', 'pressure', 'wind', 'sun', 'precip', 'cloud']
-        )]
-        if weather_cols:
-            print(f"🌤️  Weather columns found: {len(weather_cols)}")
-        else:
-            print("⚠️  No weather columns detected")
 
         # Date range
         if 'timestamp' in df.columns:
@@ -561,45 +416,39 @@ class ModelTrainer:
                 print(
                     f"🟢 Healthy Days: {total_valid - migraine_count:,} ({(total_valid - migraine_count) / total_valid * 100:.2f}%)")
 
-        # Weather statistics (if available)
-        if 'pressure_mean' in df.columns:
-            pressure = pd.to_numeric(df['pressure_mean'], errors='coerce')
-            print(f"\n🌡️  Pressure Statistics:")
-            print(f"   Mean: {pressure.mean():.1f} hPa")
-            print(f"   Range: {pressure.min():.1f} - {pressure.max():.1f} hPa")
+        # Stress statistics
+        if 'stress_intensity' in df.columns:
+            stress = pd.to_numeric(df['stress_intensity'], errors='coerce')
+            print(f"\n😰 Stress Statistics:")
+            print(f"   Mean: {stress.mean():.2f}")
+            print(f"   High stress days (>7): {(stress > 7).sum():,}")
 
-        if 'temp_mean' in df.columns:
-            temp = pd.to_numeric(df['temp_mean'], errors='coerce')
-            print(f"\n🌡️  Temperature Statistics:")
-            print(f"   Mean: {temp.mean():.1f}°C")
-            print(f"   Range: {temp.min():.1f} - {temp.max():.1f}°C")
+        # Sleep statistics
+        if 'sleep_duration' in df.columns:
+            sleep = pd.to_numeric(df['sleep_duration'], errors='coerce')
+            print(f"\n😴 Sleep Statistics:")
+            print(f"   Mean duration: {sleep.mean():.2f} hours")
+            print(f"   Insufficient sleep (<6h): {(sleep < 6).sum():,}")
+
+        # Data completeness
+        print(f"\n📉 Missing Data:")
+        missing = (df.isnull().sum() / len(df) * 100).sort_values(ascending=False)
+        has_missing = False
+        for col, pct in missing.items():
+            if pct > 0:
+                has_missing = True
+                print(f"   {col}: {pct:.1f}%")
+        if not has_missing:
+            print("   ✅ No missing data!")
 
         print("=" * 60)
         return True
 
     @staticmethod
-    def train_model_from_csv(health_csv, weather_csv=None, gender='female',
-                             save_path='migraine_model.pkl', sample_size=None):
-        """
-        Complete training pipeline with optional weather data
-
-        Args:
-            health_csv: Path to health_data CSV file
-            weather_csv: Optional path to weather_data CSV file
-            gender: Gender for training ('female' or 'male')
-            save_path: Where to save the trained model
-            sample_size: Optional limit on training samples
-        """
-        # Load health data
-        df = ModelTrainer.load_csv_data(health_csv)
-
-        # Merge weather data if provided
-        if weather_csv:
-            if Path(weather_csv).exists():
-                df = ModelTrainer.merge_weather_data(df, weather_csv)
-            else:
-                print(f"⚠️  Weather file not found: {weather_csv}")
-                print("   Training without weather data...")
+    def train_model_from_csv(csv_filepath, gender='female', save_path='migraine_model.pkl', sample_size=None):
+        """Complete training pipeline from CSV file"""
+        # Load data
+        df = ModelTrainer.load_csv_data(csv_filepath)
 
         # Validate
         ModelTrainer.validate_data(df)
@@ -620,21 +469,21 @@ class ModelTrainer:
 # Example usage
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("🧠 MIGRAINE PREDICTION ML MODEL - WITH WEATHER INTEGRATION")
+    print("🧠 MIGRAINE PREDICTION ML MODEL - TRAINING MODULE")
     print("=" * 60 + "\n")
 
-    # Train with health + weather data
+    # Train with your CSV file
+    # Use sample_size to limit data for faster training (optional)
     model = ModelTrainer.train_model_from_csv(
-        health_csv='synthetic_data_10_000/health_data_10000_365.csv',
-        weather_csv='synthetic_data_10_000/weather_data.csv',  # Add your weather CSV here!
+        csv_filepath='synthetic_data_10_000/health_data_10000_365.csv',
         gender='female',
-        save_path='migraine_model_weather.pkl',
-        sample_size=100000  # Use None for all data
+        save_path='migraine_model.pkl',
+        sample_size=100000  # Use 100k samples for faster training, or None for all data
     )
 
     print("\n" + "=" * 60)
     print("✅ TRAINING COMPLETE!")
     print("=" * 60)
-    print("📦 Model saved with weather features integrated.")
-    print("💡 The model can now detect relationships between weather and migraines!")
+    print("📦 Model saved and ready for predictions.")
+    print("💡 Use model.predict(new_data) to make predictions.")
     print("=" * 60)
