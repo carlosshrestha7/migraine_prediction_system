@@ -1,6 +1,6 @@
 # UI/components/checkin_form.py - DAILY CHECK-IN FORM (Matches Comprehensive Trigger Categories)
 import streamlit as st
-from utils.config import APP_CONFIG
+from UI.utils.config import APP_CONFIG
 
 
 def render_quick_checkin():

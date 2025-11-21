@@ -1,6 +1,6 @@
 # UI/components/sidebar.py - NAVIGATION (Matches your Use Case Diagram)
 import streamlit as st
-from utils.config import APP_CONFIG
+from UI.utils.config import APP_CONFIG
 
 def render_sidebar():
     """Render the main navigation sidebar"""

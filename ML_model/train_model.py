@@ -12,7 +12,7 @@ def main():
     try:
         # Train with your CSV file
         model = ModelTrainer.train_model_from_csv(
-            csv_filepath='event_dump.csv',
+            csv_filepath='synthetic_data_10_000/health_data_10000_365.csv',
             gender='female',
             save_path='migraine_model.pkl'
         )
