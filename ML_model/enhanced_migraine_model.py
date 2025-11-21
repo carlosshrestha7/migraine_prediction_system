@@ -5,7 +5,7 @@ Combines ML predictions with actionable recommendations
 """
 
 from migraine_model import MigrainePredictionModel
-from migraine_recommendation_engine import MigraineRecommendationEngine
+from migraine_recommendation_engine import MigraineRecommendationEngine, format_recommendations_for_display
 
 
 class EnhancedMigrainePredictionModel(MigrainePredictionModel):
@@ -50,11 +50,23 @@ class EnhancedMigrainePredictionModel(MigrainePredictionModel):
                 'risk_level': base_prediction['risk_band'],
                 'focus_area': 'General Prevention',
                 'key_recommendations': [],
-                'quick_actions': [],
-                'prevention_tips': []
+                'quick_actions': [
+                    "Ensure proper hydration",
+                    "Maintain regular meal schedule",
+                    "Manage stress levels"
+                ],
+                'prevention_tips': [
+                    "💧 Stay hydrated throughout the day",
+                    "🍽️ Eat balanced meals regularly",
+                    "😴 Prioritize quality sleep"
+                ]
             }
         
         # Merge recommendations with base prediction
         enhanced_output = {**base_prediction, **recommendations}
         
         return enhanced_output
+
+
+# Export the display function for easy access
+format_recommendations_for_display = format_recommendations_for_display
