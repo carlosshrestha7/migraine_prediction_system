@@ -1,7 +1,7 @@
 # UI/pages/3_History.py
 import streamlit as st
-from components.history_table import render_history_table
-from components.risk_display import render_risk_guide
+from UI.components.history_table import render_history_table
+from UI.components.risk_display import render_risk_guide
 
 def render():
     """Render the history page"""

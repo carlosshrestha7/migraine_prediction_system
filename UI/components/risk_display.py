@@ -1,6 +1,7 @@
 # UI/components/risk_display.py - COLOR-CODED RISK BANDS (Matches UI Flow Diagram)
 import streamlit as st
-from utils.config import APP_CONFIG
+from UI.utils.config import APP_CONFIG
+
 
 def render_risk_assessment(prediction_data=None):
     """Render color-coded risk assessment display"""

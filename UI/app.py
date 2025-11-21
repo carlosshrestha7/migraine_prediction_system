@@ -1,6 +1,6 @@
 # UI/app.py - UPDATED MAIN APP
 import streamlit as st
-from components.sidebar import render_sidebar, handle_page_navigation
+from UI.components.sidebar import render_sidebar, handle_page_navigation
 from utils.config import APP_CONFIG
 
 def main():
@@ -27,4 +27,4 @@ def main():
     handle_page_navigation()
 
 if __name__ == "__main__":
-    main()git 
+    main()

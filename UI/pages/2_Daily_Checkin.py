@@ -1,7 +1,7 @@
 # UI/pages/2_Daily_Checkin.py
 import streamlit as st
-from components.checkin_form import render_complete_checkin_form
-from services.prediction_service import get_prediction
+from UI.components.checkin_form import render_complete_checkin_form
+from UI.services.prediction_service import get_prediction
 
 def render():
     """Render the daily check-in page"""

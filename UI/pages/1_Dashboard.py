@@ -1,7 +1,7 @@
 # UI/pages/1_Dashboard.py
 import streamlit as st
-from components.risk_display import render_risk_assessment
-from components.checkin_form import render_quick_checkin
+from UI.components.risk_display import render_risk_assessment
+from UI.components.checkin_form import render_quick_checkin
 
 def render():
     """Render the main dashboard"""

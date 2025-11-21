@@ -1,5 +1,5 @@
 # UI/services/prediction_service.py - MOCK PREDICTION SERVICE (Matches ML Service)
-from utils.config import APP_CONFIG
+from UI.utils.config import APP_CONFIG
 import random
 from datetime import datetime
 
